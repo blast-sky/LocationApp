@@ -1,7 +1,6 @@
 package com.example.locationtestapp.presentation
 
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -9,27 +8,25 @@ import android.provider.Settings
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.MultiplePermissionsState
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainScreenViewModel) {
+fun MainScreen(
+    viewModel: MainScreenViewModel = viewModel()
+) {
     val multiplePermissionsState = rememberMultiplePermissionsState(
-        permissions = listOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-        )
+        permissions = viewModel.permissions
     )
 
     val context = LocalContext.current
@@ -40,7 +37,9 @@ fun MainScreen(viewModel: MainScreenViewModel) {
         modifier = Modifier.fillMaxSize()
     ) {
         Card(
-            modifier = Modifier.animateContentSize(),
+            modifier = Modifier
+                .animateContentSize()
+                .padding(6.dp),
             shape = MaterialTheme.shapes.large,
         ) {
             Column(
@@ -49,13 +48,13 @@ fun MainScreen(viewModel: MainScreenViewModel) {
                 verticalArrangement = Arrangement.Center
             ) {
                 when {
-                    multiplePermissionsState.allPermissionsGranted -> OnGranted(
+                    multiplePermissionsState.allPermissionsGranted -> LocationList(
                         viewModel
                     )
-                    multiplePermissionsState.shouldShowRationale -> OnShowRationale(
+                    multiplePermissionsState.shouldShowRationale -> Rationale(
                         multiplePermissionsState
                     )
-                    else -> OnNotGranted(context)
+                    else -> RequirePermissionFromSettings(context)
                 }
             }
         }
@@ -63,28 +62,7 @@ fun MainScreen(viewModel: MainScreenViewModel) {
 }
 
 @Composable
-private fun LifecycleDispatcher(
-    onResume: () -> Unit,
-    onPause: () -> Unit,
-) {
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(key1 = lifecycle) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                onResume.invoke()
-            }
-            if (event == Lifecycle.Event.ON_PAUSE) {
-                onPause.invoke()
-            }
-        }
-
-        lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
-    }
-}
-
-@Composable
-private fun OnNotGranted(context: Context) {
+private fun RequirePermissionFromSettings(context: Context) {
     Text("Can`t work without permission")
     Spacer(modifier = Modifier.height(16.dp))
     Button(onClick = {
@@ -100,7 +78,7 @@ private fun OnNotGranted(context: Context) {
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-private fun OnShowRationale(multiplePermissionsState: MultiplePermissionsState) {
+private fun Rationale(multiplePermissionsState: MultiplePermissionsState) {
     Text(text = "Permission must be required")
     Button(onClick = {
         multiplePermissionsState.launchMultiplePermissionRequest()
@@ -110,53 +88,39 @@ private fun OnShowRationale(multiplePermissionsState: MultiplePermissionsState) 
 }
 
 @Composable
-private fun OnGranted(
+private fun LocationList(
     viewModel: MainScreenViewModel
 ) {
-    val locations = viewModel.locations
-    var isStartCollect by remember { mutableStateOf(false) }
-    var isGpsProvided by remember { mutableStateOf(viewModel.isGpsProviderEnabled) }
+    val locationPoints by viewModel.locationPoints.collectAsState()
+    val isRecording by viewModel.isRecording.collectAsState()
+    var isGpsProvided by remember { mutableStateOf(true) }
 
     Text(text = "Granted")
     Spacer(modifier = Modifier.height(16.dp))
 
-    if (locations.isNotEmpty()) {
-        LazyColumn {
-            locations.forEach {
-                item {
-                    Row(modifier = Modifier) {
-                        Text(text = "${it.latitude}, ${it.longitude}")
-                    }
+    LazyColumn {
+        if (locationPoints.isNotEmpty()) {
+            items(locationPoints) {
+                Row(modifier = Modifier) {
+                    Text(text = "${it.location.latitude}, ${it.location.longitude} | Time = ${it.date.time}")
+                }
+            }
+        }
+        item {
+            if (!isRecording) {
+                Button(onClick = {
+                    viewModel.startRecordLocation()
+                }) {
+                    Text("Start collect location")
+                }
+            } else {
+                Button(onClick = {
+                    viewModel.stopRecordLocation()
+                }) {
+                    Text("Stop collect location")
                 }
             }
         }
     }
 
-    if (isGpsProvided && !isStartCollect) {
-        Button(onClick = {
-            isStartCollect = true
-            viewModel.startGetLocation()
-        }) {
-            Text("Start collect location")
-        }
-    } else if (!isGpsProvided) {
-        Text("GPS needed")
-        Button(onClick = {
-            isGpsProvided = viewModel.isGpsProviderEnabled
-        }) {
-            Text(text = "Check")
-        }
-    }
-
-    LifecycleDispatcher(
-        onPause = {
-            if (isStartCollect)
-                viewModel.stopGetLocation()
-        },
-        onResume = {
-            if (isStartCollect)
-                viewModel.startGetLocation()
-            isGpsProvided = viewModel.isGpsProviderEnabled
-        }
-    )
 }

@@ -7,21 +7,21 @@ import android.os.Looper
 import com.example.locationtestapp.domain.LocationProvider
 import com.example.locationtestapp.util.suspend
 import com.google.android.gms.location.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.android.scopes.ServiceScoped
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class DefaultLocationProvider(context: Context) : LocationProvider {
+@ServiceScoped
+class DefaultLocationProvider @Inject constructor(
+    private val fusedLocationProviderClient: FusedLocationProviderClient
+) : LocationProvider {
 
-    private val fusedLocationProviderClient =
-        LocationServices.getFusedLocationProviderClient(context)
-
-    private val scope = CoroutineScope(Job() + Dispatchers.IO)
+    private var job : Job? = null
 
     private val _isLocationAvailable = MutableStateFlow(false)
     val isLocationAvailable = _isLocationAvailable.asStateFlow()
@@ -36,7 +36,9 @@ class DefaultLocationProvider(context: Context) : LocationProvider {
 
         override fun onLocationResult(locationResult: LocationResult) {
             locationResult.lastLocation?.let {
-                scope.launch { _locations.emit(it) }
+                job = CoroutineScope(SupervisorJob()).launch {
+                    _locations.emit(it)
+                }
             }
         }
     }
@@ -60,6 +62,7 @@ class DefaultLocationProvider(context: Context) : LocationProvider {
             maxWaitTime = 2000
             fastestInterval = 500
             interval = 1000
+            priority = Priority.PRIORITY_HIGH_ACCURACY
         }
 
         fusedLocationProviderClient.requestLocationUpdates(
@@ -71,5 +74,6 @@ class DefaultLocationProvider(context: Context) : LocationProvider {
 
     override fun stopObserveLocation() {
         fusedLocationProviderClient.removeLocationUpdates(locationCallback)
+        job?.cancel()
     }
 }
