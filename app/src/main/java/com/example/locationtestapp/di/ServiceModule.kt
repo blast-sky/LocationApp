@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import androidx.core.app.NotificationCompat
 import com.example.locationtestapp.MainActivity
 import com.example.locationtestapp.R
 import com.example.locationtestapp.data.DefaultLocationProvider
@@ -21,11 +22,11 @@ import dagger.hilt.android.scopes.ServiceScoped
 @InstallIn(ServiceComponent::class)
 class ServiceModule {
 
+    @ServiceScoped
     @Provides
     fun provideFusedClient(@ApplicationContext app: Context) =
         LocationServices.getFusedLocationProviderClient(app)
 
-    @ServiceScoped
     @Provides
     fun provideLocationProvider(defaultLocationProvider: DefaultLocationProvider): LocationProvider =
         defaultLocationProvider
@@ -42,12 +43,12 @@ class ServiceModule {
     fun provideNotificationBuilder(
         @ApplicationContext app: Context,
         myActivityPendingIntent: PendingIntent
-    ) = Notification.Builder(
+    ) = NotificationCompat.Builder(
         app,
         LocationService.CHANNEL_ID
     )
-        .setContentTitle(app.packageName)
-        .setContentText("Content text")
+        .setContentTitle(app.resources.getString(R.string.app_name))
+        .setContentText(app.resources.getString(R.string.starting))
         .setOngoing(true)
         .setContentIntent(myActivityPendingIntent)
         .setSmallIcon(R.drawable.ic_launcher_foreground)

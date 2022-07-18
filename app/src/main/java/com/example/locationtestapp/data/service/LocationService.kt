@@ -1,17 +1,17 @@
 package com.example.locationtestapp.data.service
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.Service
-import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import androidx.annotation.RequiresApi
+import androidx.core.app.NotificationChannelCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import com.example.locationtestapp.R
+import com.example.locationtestapp.data.mapper.toDomainLocation
 import com.example.locationtestapp.data.mapper.toLocationWithDate
 import com.example.locationtestapp.domain.LocationProvider
+import com.example.locationtestapp.domain.model.Location
 import com.example.locationtestapp.domain.model.LocationWithDate
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
@@ -23,7 +23,7 @@ import javax.inject.Inject
 class LocationService : Service() {
 
     @Inject
-    lateinit var baseNotification: Notification.Builder
+    lateinit var baseNotification: NotificationCompat.Builder
 
     @Inject
     lateinit var locationProvider: LocationProvider
@@ -33,40 +33,57 @@ class LocationService : Service() {
 
     val savedLocations = MutableStateFlow(mutableListOf<LocationWithDate>())
     val isRecording = MutableStateFlow(false)
+    val isGpsAvailable = MutableStateFlow(true)
 
     fun startRecordLocation() {
         val notification = baseNotification
+        val notificationManager = NotificationManagerCompat.from(this)
+        val channel =
+            NotificationChannelCompat.Builder(NOTIFICATION_CHANNEL_ID, NOTIFICATION_IMPORTANCE)
+                .setName(NOTIFICATION_CHANNEL_NAME)
+                .build()
 
-        val notificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            createNotificationChannel(notificationManager)
-        }
-
+        notificationManager.createNotificationChannel(channel)
         startForeground(NOTIFICATION_ID, notification.build())
         notificationManager.notify(NOTIFICATION_ID, notification.build())
 
         isRecording.value = true
         locationProvider.startObserveLocation()
+
         job = CoroutineScope(SupervisorJob()).launch {
-            locationProvider.locations.collect { location ->
-                location?.let { curLocation ->
-                    savedLocations.value =
-                        (savedLocations.value + mutableListOf(curLocation.toLocationWithDate())).toMutableList()
+            launch {
+                locationProvider.locations.collect { location ->
+                    location?.let { notNullLocation ->
+                        val locationWithDate = notNullLocation.toLocationWithDate()
+                        savedLocations.value =
+                            (savedLocations.value + locationWithDate).toMutableList()
+                    }
+                    notifyWithLastLocation(
+                        location?.toDomainLocation(),
+                        notificationManager,
+                        baseNotification
+                    )
+                }
+            }
+            launch {
+                locationProvider.isLocationAvailable.collect { available ->
+                    isGpsAvailable.value = available
                 }
             }
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
-    private fun createNotificationChannel(notificationManager: NotificationManager) {
-        val channel = NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
-            NOTIFICATION_CHANNEL_NAME,
-            NotificationManager.IMPORTANCE_DEFAULT
+    private fun notifyWithLastLocation(
+        curLocation: Location?,
+        notificationManager: NotificationManagerCompat,
+        baseNotification: NotificationCompat.Builder
+    ) {
+        val notification = baseNotification
+        notification.setContentTitle(resources.getText(R.string.current_location))
+        notification.setContentText(
+            curLocation?.toString() ?: getString(R.string.location_cant_determined)
         )
-        notificationManager.createNotificationChannel(channel)
+        notificationManager.notify(NOTIFICATION_ID, notification.build())
     }
 
     fun stopRecordLocation() {
@@ -94,5 +111,6 @@ class LocationService : Service() {
 
         const val NOTIFICATION_CHANNEL_ID = "NOTIFICATION_CHANNEL_ID_LOCATION_SERVICE"
         const val NOTIFICATION_CHANNEL_NAME = "NOTIFICATION_CHANNEL_NAME_LOCATION_SERVICE"
+        const val NOTIFICATION_IMPORTANCE = NotificationManagerCompat.IMPORTANCE_DEFAULT
     }
 }

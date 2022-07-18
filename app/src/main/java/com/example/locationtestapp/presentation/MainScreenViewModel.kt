@@ -1,7 +1,6 @@
 package com.example.locationtestapp.presentation
 
 import android.Manifest
-import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -9,6 +8,7 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.locationtestapp.App
 import com.example.locationtestapp.data.service.LocationBinder
 import com.example.locationtestapp.data.service.LocationService
 import com.example.locationtestapp.domain.model.LocationWithDate
@@ -22,7 +22,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MainScreenViewModel @Inject constructor(
     @ApplicationContext app: Context
-) : AndroidViewModel(app as Application) {
+) : AndroidViewModel(app as App) {
 
     private var binderJob: Job? = null
     private var locationBinder: LocationBinder? = null
@@ -42,6 +42,11 @@ class MainScreenViewModel @Inject constructor(
                             isRecording.value = it
                         }
                     }
+                    launch {
+                        locationService.isGpsAvailable.collect {
+                            isGpsAvailable.value = it
+                        }
+                    }
                 }
             }
         }
@@ -54,6 +59,7 @@ class MainScreenViewModel @Inject constructor(
 
     val locationPoints = MutableStateFlow(mutableListOf<LocationWithDate>())
     val isRecording = MutableStateFlow(false)
+    val isGpsAvailable = MutableStateFlow(true)
 
     val permissions = listOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -61,21 +67,13 @@ class MainScreenViewModel @Inject constructor(
     )
 
     init {
-        getApplication<Application>().bindService(
-            serviceIntent,
-            serviceConnection,
-            Context.BIND_AUTO_CREATE
-        )
+        bindAndObserveService()
     }
 
     fun startRecordLocation() {
         locationBinder?.let {
             serviceConnection.onServiceConnected(null, it)
-        } ?: getApplication<Application>().bindService(
-            serviceIntent,
-            serviceConnection,
-            Context.BIND_AUTO_CREATE
-        )
+        } ?: bindAndObserveService()
         locationBinder?.locationService?.startRecordLocation()
     }
 
@@ -83,4 +81,10 @@ class MainScreenViewModel @Inject constructor(
         locationBinder?.locationService?.stopRecordLocation()
         binderJob?.cancel()
     }
+
+    private fun bindAndObserveService() = getApplication<App>().bindService(
+        serviceIntent,
+        serviceConnection,
+        Context.BIND_AUTO_CREATE
+    )
 }

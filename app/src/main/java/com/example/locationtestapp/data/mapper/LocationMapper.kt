@@ -5,6 +5,11 @@ import com.example.locationtestapp.domain.model.LocationWithDate
 import java.util.*
 
 fun Location.toLocationWithDate() = LocationWithDate(
-    location = com.example.locationtestapp.domain.model.Location(latitude, longitude),
+    location = toDomainLocation(),
     date = Calendar.getInstance().time
+)
+
+fun Location.toDomainLocation() = com.example.locationtestapp.domain.model.Location(
+    latitude = latitude,
+    longitude = longitude
 )
