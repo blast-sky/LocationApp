@@ -6,16 +6,18 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.locationtestapp.App
 import com.example.locationtestapp.data.service.LocationBinder
 import com.example.locationtestapp.data.service.LocationService
-import com.example.locationtestapp.domain.model.LocationWithDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -30,24 +32,8 @@ class MainScreenViewModel @Inject constructor(
     private val serviceIntent = Intent(getApplication(), LocationService::class.java)
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(p0: ComponentName?, binder: IBinder?) {
-            locationBinder = (binder as LocationBinder).apply {
-                binderJob = viewModelScope.launch {
-                    launch {
-                        locationService.savedLocations.collect {
-                            locationPoints.value = it
-                        }
-                    }
-                    launch {
-                        locationService.isRecording.collect {
-                            isRecording.value = it
-                        }
-                    }
-                    launch {
-                        locationService.isGpsAvailable.collect {
-                            isGpsAvailable.value = it
-                        }
-                    }
-                }
+            locationBinder = (binder as LocationBinder).also { locationBinder ->
+                binderJob = observeService(locationBinder.locationService)
             }
         }
 
@@ -57,9 +43,7 @@ class MainScreenViewModel @Inject constructor(
         }
     }
 
-    val locationPoints = MutableStateFlow(mutableListOf<LocationWithDate>())
-    val isRecording = MutableStateFlow(false)
-    val isGpsAvailable = MutableStateFlow(true)
+    var state by mutableStateOf(LocationListState())
 
     val permissions = listOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -71,8 +55,8 @@ class MainScreenViewModel @Inject constructor(
     }
 
     fun startRecordLocation() {
-        locationBinder?.let {
-            serviceConnection.onServiceConnected(null, it)
+        locationBinder?.let { binder ->
+            serviceConnection.onServiceConnected(null, binder)
         } ?: bindAndObserveService()
         locationBinder?.locationService?.startRecordLocation()
     }
@@ -87,4 +71,24 @@ class MainScreenViewModel @Inject constructor(
         serviceConnection,
         Context.BIND_AUTO_CREATE
     )
+
+    private fun observeService(locationService: LocationService): Job = with(locationService) {
+        viewModelScope.launch {
+            launch {
+                savedLocations.collectLatest { locations ->
+                    state = state.copy(locationPoints = locations)
+                }
+            }
+            launch {
+                isRecording.collectLatest { isRecording ->
+                    state = state.copy(isRecording = isRecording)
+                }
+            }
+            launch {
+                isGpsAvailable.collectLatest { isGpsAvailability ->
+                    state = state.copy(isGpsAvailability = isGpsAvailability)
+                }
+            }
+        }
+    }
 }

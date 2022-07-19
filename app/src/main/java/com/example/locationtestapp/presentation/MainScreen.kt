@@ -17,8 +17,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -61,7 +60,9 @@ fun MainScreen(
             ) {
                 when {
                     multiplePermissionsState.allPermissionsGranted -> LocationList(
-                        viewModel
+                        state = viewModel.state,
+                        startRecordingLocation = viewModel::startRecordLocation,
+                        stopRecordingLocation = viewModel::stopRecordLocation,
                     )
                     multiplePermissionsState.shouldShowRationale -> Rationale(
                         multiplePermissionsState
@@ -101,11 +102,16 @@ private fun Rationale(multiplePermissionsState: MultiplePermissionsState) {
 
 @Composable
 private fun LocationList(
-    viewModel: MainScreenViewModel
+    state: LocationListState,
+    startRecordingLocation: () -> Unit,
+    stopRecordingLocation: () -> Unit,
 ) {
-    val locationPoints by viewModel.locationPoints.collectAsState()
-    val isRecording by viewModel.isRecording.collectAsState()
-    val isLocationProvided by viewModel.isGpsAvailable.collectAsState()
+    val locationPoints = state.locationPoints
+    val isRecording = state.isRecording
+    val isLocationProvided = state.isGpsAvailability
+
+    val currentStartRecordingLocation = rememberUpdatedState(startRecordingLocation)
+    val currentStopRecordingLocation = rememberUpdatedState(stopRecordingLocation)
 
     val lazyListState = rememberLazyListState()
 
@@ -132,15 +138,11 @@ private fun LocationList(
     if (locationPoints.isNotEmpty()) Divider(modifier = Modifier.padding(6.dp))
 
     if (!isRecording) {
-        Button(onClick = {
-            viewModel.startRecordLocation()
-        }) {
+        Button(onClick = currentStartRecordingLocation.value) {
             Text(text = stringResource(R.string.start_collect_location))
         }
     } else {
-        Button(onClick = {
-            viewModel.stopRecordLocation()
-        }) {
+        Button(onClick = currentStopRecordingLocation.value) {
             Text(text = stringResource(R.string.stop_collect_location))
         }
     }

@@ -3,19 +3,21 @@ package com.example.locationtestapp.data.service
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
-import android.util.Log
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.locationtestapp.R
+import com.example.locationtestapp.data.LocationFlowResult
 import com.example.locationtestapp.data.mapper.toDomainLocation
 import com.example.locationtestapp.data.mapper.toLocationWithDate
 import com.example.locationtestapp.domain.LocationProvider
 import com.example.locationtestapp.domain.model.Location
 import com.example.locationtestapp.domain.model.LocationWithDate
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 
@@ -32,8 +34,8 @@ class LocationService : Service() {
     private val locationBinder = LocationBinder(this)
 
     val savedLocations = MutableStateFlow(mutableListOf<LocationWithDate>())
-    val isRecording = MutableStateFlow(false)
     val isGpsAvailable = MutableStateFlow(true)
+    val isRecording = MutableStateFlow(false)
 
     fun startRecordLocation() {
         val notification = baseNotification
@@ -48,30 +50,29 @@ class LocationService : Service() {
         notificationManager.notify(NOTIFICATION_ID, notification.build())
 
         isRecording.value = true
-        locationProvider.startObserveLocation()
+        job = observeLocationProvider(notificationManager)
+    }
 
-        job = CoroutineScope(SupervisorJob()).launch {
-            launch {
-                locationProvider.locations.collect { location ->
-                    location?.let { notNullLocation ->
+    private fun observeLocationProvider(notificationManager: NotificationManagerCompat) =
+        CoroutineScope(Job()).launch {
+            locationProvider.locationFlow.collect { flowResult ->
+                when (flowResult) {
+                    is LocationFlowResult.Result -> flowResult.location?.let { notNullLocation ->
                         val locationWithDate = notNullLocation.toLocationWithDate()
                         savedLocations.value =
                             (savedLocations.value + locationWithDate).toMutableList()
+                    }.also {
+                        notifyWithLastLocation(
+                            flowResult.location?.toDomainLocation(),
+                            notificationManager,
+                            baseNotification
+                        )
                     }
-                    notifyWithLastLocation(
-                        location?.toDomainLocation(),
-                        notificationManager,
-                        baseNotification
-                    )
-                }
-            }
-            launch {
-                locationProvider.isLocationAvailable.collect { available ->
-                    isGpsAvailable.value = available
+                    is LocationFlowResult.Availability ->
+                        isGpsAvailable.value = flowResult.availability
                 }
             }
         }
-    }
 
     private fun notifyWithLastLocation(
         curLocation: Location?,
@@ -88,18 +89,13 @@ class LocationService : Service() {
 
     fun stopRecordLocation() {
         isRecording.value = false
-        locationProvider.stopObserveLocation()
         job?.cancel()
         stopForeground(true)
     }
 
-    override fun onBind(intent: Intent?): IBinder {
-        Log.d("Location Service", "Bind")
-        return locationBinder
-    }
+    override fun onBind(intent: Intent?): IBinder = locationBinder
 
     override fun onDestroy() {
-        Log.d("Location Service", "Destroy")
         isRecording.value = false
         job?.cancel()
         super.onDestroy()

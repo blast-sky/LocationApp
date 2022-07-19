@@ -1,19 +1,13 @@
 package com.example.locationtestapp.data
 
 import android.annotation.SuppressLint
-import android.location.Location
 import android.os.Looper
 import com.example.locationtestapp.domain.LocationProvider
 import com.example.locationtestapp.util.suspend
 import com.google.android.gms.location.*
 import dagger.hilt.android.scopes.ServiceScoped
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -24,26 +18,33 @@ class DefaultLocationProvider @Inject constructor(
     private val currentLocationRequest: CurrentLocationRequest
 ) : LocationProvider {
 
-    private var job: Job? = null
+    @SuppressLint("MissingPermission")
+    override val locationFlow = channelFlow {
+        val locationCallback = createLocationCallback(
+            onAvailability = { launch { send(LocationFlowResult.Availability(it.isLocationAvailable)) } },
+            onLocationResult = { launch { send(LocationFlowResult.Result(it.lastLocation)) } }
+        )
 
-    private val _isLocationAvailable = MutableStateFlow(true)
-    override val isLocationAvailable = _isLocationAvailable.asStateFlow()
+        fusedLocationProviderClient.requestLocationUpdates(
+            locationRequest,
+            locationCallback,
+            Looper.getMainLooper()
+        )
 
-    private val _locations = MutableSharedFlow<Location>()
-    override val locations = _locations.asSharedFlow()
-
-    private val locationCallback = object : LocationCallback() {
-        override fun onLocationAvailability(availability: LocationAvailability) {
-            _isLocationAvailable.value = availability.isLocationAvailable
+        awaitClose {
+            fusedLocationProviderClient.removeLocationUpdates(locationCallback)
         }
+    }
 
-        override fun onLocationResult(locationResult: LocationResult) {
-            locationResult.lastLocation?.let {
-                job = CoroutineScope(SupervisorJob()).launch {
-                    _locations.emit(it)
-                }
-            }
-        }
+    private inline fun createLocationCallback(
+        crossinline onAvailability: (LocationAvailability) -> Unit,
+        crossinline onLocationResult: (LocationResult) -> Unit
+    ) = object : LocationCallback() {
+        override fun onLocationAvailability(availability: LocationAvailability) =
+            onAvailability.invoke(availability)
+
+        override fun onLocationResult(locationResult: LocationResult) =
+            onLocationResult.invoke(locationResult)
     }
 
     @SuppressLint("MissingPermission")
@@ -53,18 +54,4 @@ class DefaultLocationProvider @Inject constructor(
     @SuppressLint("MissingPermission")
     override suspend fun getCurrentLocation() = fusedLocationProviderClient
         .getCurrentLocation(currentLocationRequest, null).suspend()
-
-    @SuppressLint("MissingPermission")
-    override fun startObserveLocation() {
-        fusedLocationProviderClient.requestLocationUpdates(
-            locationRequest,
-            locationCallback,
-            Looper.getMainLooper()
-        )
-    }
-
-    override fun stopObserveLocation() {
-        fusedLocationProviderClient.removeLocationUpdates(locationCallback)
-        job?.cancel()
-    }
 }
