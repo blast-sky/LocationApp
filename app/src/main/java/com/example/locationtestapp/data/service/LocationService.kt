@@ -7,10 +7,8 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.locationtestapp.R
-import com.example.locationtestapp.data.LocationFlowResult
-import com.example.locationtestapp.data.mapper.toDomainLocation
-import com.example.locationtestapp.data.mapper.toLocationWithDate
-import com.example.locationtestapp.domain.LocationProvider
+import com.example.locationtestapp.domain.location_provider.LocationFlowResult
+import com.example.locationtestapp.domain.location_provider.LocationProvider
 import com.example.locationtestapp.domain.model.Location
 import com.example.locationtestapp.domain.model.LocationWithDate
 import dagger.hilt.android.AndroidEntryPoint
@@ -58,12 +56,11 @@ class LocationService : Service() {
             locationProvider.locationFlow.collect { flowResult ->
                 when (flowResult) {
                     is LocationFlowResult.Result -> flowResult.location?.let { notNullLocation ->
-                        val locationWithDate = notNullLocation.toLocationWithDate()
                         savedLocations.value =
-                            (savedLocations.value + locationWithDate).toMutableList()
+                            (savedLocations.value + notNullLocation).toMutableList()
                     }.also {
                         notifyWithLastLocation(
-                            flowResult.location?.toDomainLocation(),
+                            flowResult.location?.location,
                             notificationManager,
                             baseNotification
                         )

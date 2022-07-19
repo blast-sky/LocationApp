@@ -1,7 +1,6 @@
-package com.example.locationtestapp.domain
+package com.example.locationtestapp.domain.location_provider
 
 import android.location.Location
-import com.example.locationtestapp.data.LocationFlowResult
 import kotlinx.coroutines.flow.Flow
 
 

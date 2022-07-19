@@ -2,7 +2,9 @@ package com.example.locationtestapp.data
 
 import android.annotation.SuppressLint
 import android.os.Looper
-import com.example.locationtestapp.domain.LocationProvider
+import com.example.locationtestapp.data.mapper.toLocationWithDate
+import com.example.locationtestapp.domain.location_provider.LocationFlowResult
+import com.example.locationtestapp.domain.location_provider.LocationProvider
 import com.example.locationtestapp.util.suspend
 import com.google.android.gms.location.*
 import dagger.hilt.android.scopes.ServiceScoped
@@ -22,7 +24,7 @@ class DefaultLocationProvider @Inject constructor(
     override val locationFlow = channelFlow {
         val locationCallback = createLocationCallback(
             onAvailability = { launch { send(LocationFlowResult.Availability(it.isLocationAvailable)) } },
-            onLocationResult = { launch { send(LocationFlowResult.Result(it.lastLocation)) } }
+            onLocationResult = { launch { send(LocationFlowResult.Result(it.lastLocation?.toLocationWithDate())) } }
         )
 
         fusedLocationProviderClient.requestLocationUpdates(

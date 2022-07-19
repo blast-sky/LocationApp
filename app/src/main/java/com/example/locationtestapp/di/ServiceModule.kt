@@ -9,7 +9,7 @@ import com.example.locationtestapp.MainActivity
 import com.example.locationtestapp.R
 import com.example.locationtestapp.data.DefaultLocationProvider
 import com.example.locationtestapp.data.service.LocationService
-import com.example.locationtestapp.domain.LocationProvider
+import com.example.locationtestapp.domain.location_provider.LocationProvider
 import com.google.android.gms.location.LocationServices
 import dagger.Module
 import dagger.Provides
