@@ -9,8 +9,7 @@ import com.example.locationtestapp.util.suspend
 import com.google.android.gms.location.*
 import dagger.hilt.android.scopes.ServiceScoped
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.callbackFlow
 import javax.inject.Inject
 
 @ServiceScoped
@@ -21,10 +20,10 @@ class DefaultLocationProvider @Inject constructor(
 ) : LocationProvider {
 
     @SuppressLint("MissingPermission")
-    override val locationFlow = channelFlow {
+    override val locationFlow = callbackFlow {
         val locationCallback = createLocationCallback(
-            onAvailability = { launch { send(LocationFlowResult.Availability(it.isLocationAvailable)) } },
-            onLocationResult = { launch { send(LocationFlowResult.Result(it.lastLocation?.toLocationWithDate())) } }
+            onAvailability = { trySend(LocationFlowResult.Availability(it.isLocationAvailable)) },
+            onLocationResult = { trySend(LocationFlowResult.Result(it.lastLocation?.toLocationWithDate())) }
         )
 
         fusedLocationProviderClient.requestLocationUpdates(
@@ -33,9 +32,7 @@ class DefaultLocationProvider @Inject constructor(
             Looper.getMainLooper()
         )
 
-        awaitClose {
-            fusedLocationProviderClient.removeLocationUpdates(locationCallback)
-        }
+        awaitClose { fusedLocationProviderClient.removeLocationUpdates(locationCallback) }
     }
 
     private inline fun createLocationCallback(

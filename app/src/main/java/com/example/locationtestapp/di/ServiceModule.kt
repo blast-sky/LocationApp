@@ -45,7 +45,7 @@ class ServiceModule {
         myActivityPendingIntent: PendingIntent
     ) = NotificationCompat.Builder(
         app,
-        LocationService.CHANNEL_ID
+        LocationService.NOTIFICATION_CHANNEL_ID
     )
         .setContentTitle(app.resources.getString(R.string.app_name))
         .setContentText(app.resources.getString(R.string.starting))

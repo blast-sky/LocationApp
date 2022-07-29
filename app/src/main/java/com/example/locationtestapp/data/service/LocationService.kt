@@ -1,7 +1,11 @@
 package com.example.locationtestapp.data.service
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -44,7 +48,7 @@ class LocationService : Service() {
                 .build()
 
         notificationManager.createNotificationChannel(channel)
-        startForeground(NOTIFICATION_ID, notification.build())
+        startForeground(NOTIFICATION_ID, notification.build(), FOREGROUND_SERVICE_TYPE_LOCATION)
         notificationManager.notify(NOTIFICATION_ID, notification.build())
 
         isRecording.value = true
@@ -99,11 +103,10 @@ class LocationService : Service() {
     }
 
     companion object {
-        const val CHANNEL_ID = "CHANNEL_ID_LOCATION_SERVICE"
         const val NOTIFICATION_ID = 101
 
         const val NOTIFICATION_CHANNEL_ID = "NOTIFICATION_CHANNEL_ID_LOCATION_SERVICE"
-        const val NOTIFICATION_CHANNEL_NAME = "NOTIFICATION_CHANNEL_NAME_LOCATION_SERVICE"
+        const val NOTIFICATION_CHANNEL_NAME = "Location Service"
         const val NOTIFICATION_IMPORTANCE = NotificationManagerCompat.IMPORTANCE_DEFAULT
     }
 }
